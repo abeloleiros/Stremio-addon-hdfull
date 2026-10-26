@@ -5,12 +5,11 @@ const cheerio = require("cheerio");
 const HDFULL_BASE = "https://hdfull.love";
 
 function createAddon(userConfig) {
-  // Decodifica la cookie completa que introduce el usuario
   const fullCookie = userConfig ? decodeURIComponent(userConfig) : "";
 
   const builder = new addonBuilder({
     id: "org.hdfull.personal",
-    version: "1.0.1",
+    version: "1.0.2",
     name: "HDFull - Mi Cuenta",
     description: "Accede a tus series pendientes y enlaces de HDFull",
     resources: ["catalog", "stream"],
@@ -29,26 +28,32 @@ function createAddon(userConfig) {
   builder.defineCatalogHandler(async (args) => {
     if (args.id === "hdfull_pending") {
       try {
+        console.log("--- Intentando conectar a HDFull ---");
         const response = await axios.get(`${HDFULL_BASE}/perfil/seguimiento`, {
           headers: {
-            Cookie: fullCookie, // Enviamos la cookie completa (PHPSESSID + guid)
+            Cookie: fullCookie,
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           },
           maxRedirects: 5,
           validateStatus: (status) => status >= 200 && status < 400
         });
 
+        console.log("Estado HTTP recibido:", response.status);
+        console.log("URL final:", response.request.res.responseUrl || "N/A");
+        
         const $ = cheerio.load(response.data);
         const metas = [];
 
-        // Selector adaptado a la estructura de HDFull para elementos en seguimiento
-        $(".item, .box, tr").each((i, el) => {
-          const title = $(el).find(".title, a").first().text().trim();
+        // Imprimir cuántos elementos generales encuentra la página para depurar
+        console.log("Total de elementos div encontrados:", $("div").length);
+
+        // Búsqueda amplia de elementos de vídeo/series en la página
+        $("article, .item, .show, .box, li, tr").each((i, el) => {
+          const title = $(el).find(".title, h3, h4, a").first().text().trim();
           const poster = $(el).find("img").attr("src");
-          const relativeUrl = $(el).find("a").attr("href");
           
-          if (title && title.length > 2) {
-            metas.log = true;
+          // Filtrar títulos válidos que parezcan series/películas
+          if (title && title.length > 2 && title.length < 60 && !title.includes("HDFull") && !title.includes("Iniciar")) {
             metas.push({
               id: `hdfull:${encodeURIComponent(title)}`,
               type: "series",
@@ -58,13 +63,13 @@ function createAddon(userConfig) {
           }
         });
 
-        // Eliminar duplicados si los hubiera
+        // Eliminar duplicados
         const uniqueMetas = Array.from(new Set(metas.map(a => a.name)))
-          .map(name => {
-            return metas.find(a => a.name === name);
-          });
+          .map(name => metas.find(a => a.name === name));
 
+        console.log("Total de elementos extraídos para Stremio:", uniqueMetas.length);
         return { metas: uniqueMetas };
+
       } catch (error) {
         console.error("Error al obtener pendientes de HDFull:", error.message);
         return { metas: [] };
@@ -73,7 +78,6 @@ function createAddon(userConfig) {
     return { metas: [] };
   });
 
-  // Manejador de Streams
   builder.defineStreamHandler(async (args) => {
     return { streams: [] };
   });
@@ -81,7 +85,6 @@ function createAddon(userConfig) {
   return builder.getInterface();
 }
 
-// Servidor Express
 const express = require("express");
 const app = express();
 const PORT = process.env.PORT || 7000;
@@ -102,8 +105,8 @@ app.get("/", (req, res) => {
       <body>
         <div class="card">
           <h2>Configurar Addon HDFull</h2>
-          <p>Pega tu cadena de cookies completa (ej: <b>PHPSESSID=...; guid=...</b>):</p>
-          <input type="text" id="cookie" placeholder="Pega aquí toda la cookie..." /><br>
+          <p>Pega tu cadena de cookies completa:</p>
+          <input type="text" id="cookie" placeholder="PHPSESSID=...; guid=..." /><br>
           <button onclick="instalar()">Instalar en Stremio</button>
         </div>
         <script>
