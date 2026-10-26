@@ -1,7 +1,7 @@
-
+{
   "name": "stremio-hdfull-addon",
   "version": "1.0.0",
-  "description": "Addon de Stremio para cuenta de HDFull (Pendientes y Enlaces)",
+  "description": "Addon de Stremio para cuenta de HDFull",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -9,7 +9,6 @@
   "dependencies": {
     "axios": "^1.7.0",
     "cheerio": "^1.0.0",
-    "express": "^4.21.0",
     "stremio-addon-sdk": "^1.6.10"
   },
   "engines": {
