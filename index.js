@@ -9,7 +9,7 @@ function createAddon(userConfig) {
 
   const builder = new addonBuilder({
     id: "org.hdfull.personal",
-    version: "1.0.2",
+    version: "1.0.3",
     name: "HDFull - Mi Cuenta",
     description: "Accede a tus series pendientes y enlaces de HDFull",
     resources: ["catalog", "stream"],
@@ -28,31 +28,38 @@ function createAddon(userConfig) {
   builder.defineCatalogHandler(async (args) => {
     if (args.id === "hdfull_pending") {
       try {
-        console.log("--- Intentando conectar a HDFull ---");
+        console.log("--- Intentando conectar a HDFull con cabeceras de navegador ---");
+        
+        // Petición simulando un navegador real para esquivar el bloqueo 403
         const response = await axios.get(`${HDFULL_BASE}/perfil/seguimiento`, {
           headers: {
-            Cookie: fullCookie,
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "Cookie": fullCookie,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+            "Referer": `${HDFULL_BASE}/`,
+            "Sec-Ch-Ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-User": "?1",
+            "Upgrade-Insecure-Requests": "1"
           },
           maxRedirects: 5,
           validateStatus: (status) => status >= 200 && status < 400
         });
 
-        console.log("Estado HTTP recibido:", response.status);
-        console.log("URL final:", response.request.res.responseUrl || "N/A");
+        console.log("¡Conexión exitosa! Estado HTTP:", response.status);
         
         const $ = cheerio.load(response.data);
         const metas = [];
 
-        // Imprimir cuántos elementos generales encuentra la página para depurar
-        console.log("Total de elementos div encontrados:", $("div").length);
-
-        // Búsqueda amplia de elementos de vídeo/series en la página
         $("article, .item, .show, .box, li, tr").each((i, el) => {
           const title = $(el).find(".title, h3, h4, a").first().text().trim();
           const poster = $(el).find("img").attr("src");
           
-          // Filtrar títulos válidos que parezcan series/películas
           if (title && title.length > 2 && title.length < 60 && !title.includes("HDFull") && !title.includes("Iniciar")) {
             metas.push({
               id: `hdfull:${encodeURIComponent(title)}`,
@@ -63,15 +70,14 @@ function createAddon(userConfig) {
           }
         });
 
-        // Eliminar duplicados
         const uniqueMetas = Array.from(new Set(metas.map(a => a.name)))
           .map(name => metas.find(a => a.name === name));
 
-        console.log("Total de elementos extraídos para Stremio:", uniqueMetas.length);
+        console.log("Total de elementos extraídos:", uniqueMetas.length);
         return { metas: uniqueMetas };
 
       } catch (error) {
-        console.error("Error al obtener pendientes de HDFull:", error.message);
+        console.error("Error detallado al obtener pendientes de HDFull:", error.response?.status, error.message);
         return { metas: [] };
       }
     }
